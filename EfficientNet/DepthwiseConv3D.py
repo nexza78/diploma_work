@@ -13,38 +13,74 @@ from keras import regularizers
 from keras import constraints
 from keras import layers
 from keras.layers import InputSpec
+
 from keras.utils import conv_utils
-from keras.legacy.interfaces import conv3d_args_preprocessor, generate_legacy_interface
+#from keras.legacy.interfaces import conv3d_args_preprocessor, generate_legacy_interface
 from keras.layers import Conv3D
-from keras.backend.tensorflow_backend import _preprocess_padding, _preprocess_conv3d_input
+#from keras.backend.tensorflow_backend import _preprocess_padding, _preprocess_conv3d_input
+
 
 import tensorflow as tf
 
+def preprocess_padding(padding):
+    print('aaaaaaaaaaaaaaa')
+    #"""Convert keras' padding to TensorFlow's padding.
+    #Args:
+    #    padding: string, one of 'same' , 'valid'
+    #Returns:
+    #    a string, one of 'SAME', 'VALID'.
+    #Raises:
+    #    ValueError: if invalid `padding'`
+    #    
+    #"""
+    if padding == 'same':
+        padding = 'SAME'
+    elif padding == 'valid':
+        padding = 'VALID'
+    else:
+        raise ValueError('Invalid padding: ' + str(padding))
+    return padding
 
-def depthwise_conv3d_args_preprocessor(args, kwargs):
-    converted = []
+def _preprocess_conv3d_input(x, data_format):
+  """Transpose and cast the input before the conv3d.
+  Args:
+      x: input tensor.
+      data_format: string, `"channels_last"` or `"channels_first"`.
+  Returns:
+      A tensor.
+  """
+  tf_data_format = 'NDHWC'
+  if data_format == 'channels_first':
+    if not _has_nchw_support():
+      x = array_ops.transpose(x, (0, 2, 3, 4, 1))
+    else:
+      tf_data_format = 'NCDHW'
+  return x, tf_data_format
 
-    if 'init' in kwargs:
-        init = kwargs.pop('init')
-        kwargs['depthwise_initializer'] = init
-        converted.append(('init', 'depthwise_initializer'))
-
-    args, kwargs, _converted = conv3d_args_preprocessor(args, kwargs)
-    return args, kwargs, converted + _converted
-
-    legacy_depthwise_conv3d_support = generate_legacy_interface(
-    allowed_positional_args=['filters', 'kernel_size'],
-    conversions=[('nb_filter', 'filters'),
-                 ('subsample', 'strides'),
-                 ('border_mode', 'padding'),
-                 ('dim_ordering', 'data_format'),
-                 ('b_regularizer', 'bias_regularizer'),
-                 ('b_constraint', 'bias_constraint'),
-                 ('bias', 'use_bias')],
-    value_conversions={'dim_ordering': {'tf': 'channels_last',
-                                        'th': 'channels_first',
-                                        'default': None}},
-    preprocessor=depthwise_conv3d_args_preprocessor)
+#def depthwise_conv3d_args_preprocessor(args, kwargs):
+#    converted = []
+#
+#    if 'init' in kwargs:
+#        init = kwargs.pop('init')
+#        kwargs['depthwise_initializer'] = init
+#        converted.append(('init', 'depthwise_initializer'))
+#
+#    args, kwargs, _converted = conv3d_args_preprocessor(args, kwargs)
+#    return args, kwargs, converted + _converted
+#
+#    legacy_depthwise_conv3d_support = generate_legacy_interface(
+#    allowed_positional_args=['filters', 'kernel_size'],
+#    conversions=[('nb_filter', 'filters'),
+#                 ('subsample', 'strides'),
+#                 ('border_mode', 'padding'),
+#                 ('dim_ordering', 'data_format'),
+#                 ('b_regularizer', 'bias_regularizer'),
+#                 ('b_constraint', 'bias_constraint'),
+#                 ('bias', 'use_bias')],
+#    value_conversions={'dim_ordering': {'tf': 'channels_last',
+#                                        'th': 'channels_first',
+#                                        'default': None}},
+#    preprocessor=depthwise_conv3d_args_preprocessor)
 
 
 class DepthwiseConv3D(Conv3D):
@@ -157,7 +193,7 @@ class DepthwiseConv3D(Conv3D):
         self.depthwise_constraint = constraints.get(depthwise_constraint)
         self.bias_initializer = initializers.get(bias_initializer)
         self.dilation_rate = dilation_rate
-        self._padding = _preprocess_padding(self.padding)
+        self._padding = preprocess_padding(self.padding)
         self._strides = (1,) + self.strides + (1,)
         self._data_format = "NDHWC"
         self.input_dim = None
@@ -209,6 +245,9 @@ class DepthwiseConv3D(Conv3D):
         # Set input spec.
         self.input_spec = InputSpec(ndim=5, axes={channel_axis: self.input_dim})
         self.built = True
+
+    
+    
 
     def call(self, inputs, training=None):
         inputs = _preprocess_conv3d_input(inputs, self.data_format)
