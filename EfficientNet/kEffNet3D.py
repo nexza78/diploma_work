@@ -124,7 +124,6 @@ def D6v3_32ch(): return 33
 def D6v3_64ch(): return 34
 def D6v3_128ch(): return 35
 
-
 def conv3d_bn(x,
     filters,
     num_d1,
@@ -224,32 +223,32 @@ class CopyChannels3D(tensorflow.keras.layers.Layer):
         base_config = super(CopyChannels3D, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
     
-    def FitChannelCountTo3D(last_tensor, next_channel_count, has_interleaving=False, channel_axis=4):
-        """
-        Forces the number of channels to fit a specific number of channels.
-        The new number of channels must be bigger than the number of input channels.
-        The number of channels is fitted by concatenating copies of existing channels.
-        """
-        prev_layer_channel_count = tensorflow.keras.backend.int_shape(last_tensor)[channel_axis]
-        full_copies = next_channel_count // prev_layer_channel_count
-        extra_channels = next_channel_count % prev_layer_channel_count
-        output_copies = []
-        for copy_cnt in range(full_copies):
-            if copy_cnt == 0:
-                output_copies.append( last_tensor )
-            else:
-                if has_interleaving:
-                    output_copies.append( cai.layers.InterleaveChannels(step_size=((copy_cnt+1) % prev_layer_channel_count))(last_tensor) )
-                else:
-                    output_copies.append( last_tensor )
-        if (extra_channels > 0):
+def FitChannelCountTo3D(last_tensor, next_channel_count, has_interleaving=False, channel_axis=4):
+    """
+    Forces the number of channels to fit a specific number of channels.
+    The new number of channels must be bigger than the number of input channels.
+    The number of channels is fitted by concatenating copies of existing channels.
+    """
+    prev_layer_channel_count = tensorflow.keras.backend.int_shape(last_tensor)[channel_axis]
+    full_copies = next_channel_count // prev_layer_channel_count
+    extra_channels = next_channel_count % prev_layer_channel_count
+    output_copies = []
+    for copy_cnt in range(full_copies):
+        if copy_cnt == 0:
+            output_copies.append( last_tensor )
+        else:
             if has_interleaving:
-                extra_tensor = cai.layers.InterleaveChannels(step_size=((full_copies+1) % prev_layer_channel_count))(last_tensor)
+                output_copies.append( cai.layers.InterleaveChannels(step_size=((copy_cnt+1) % prev_layer_channel_count))(last_tensor) )
             else:
-                extra_tensor = last_tensor
-            output_copies.append( CopyChannels3D(0,extra_channels)(extra_tensor) )
-        last_tensor = tensorflow.keras.layers.Concatenate(axis=channel_axis)( output_copies )
-        return last_tensor
+                output_copies.append( last_tensor )
+    if (extra_channels > 0):
+        if has_interleaving:
+            extra_tensor = cai.layers.InterleaveChannels(step_size=((full_copies+1) % prev_layer_channel_count))(last_tensor)
+        else:
+            extra_tensor = last_tensor
+        output_copies.append( CopyChannels3D(0,extra_channels)(extra_tensor) )
+    last_tensor = tensorflow.keras.layers.Concatenate(axis=channel_axis)( output_copies )
+    return last_tensor
 
 def kGroupConv3D(last_tensor, filters=32, channel_axis=3, channels_per_group=16, name=None, activation=None, has_batch_norm=True, has_batch_scale=True, use_bias=True, kernel_size=1, stride_size=1, padding='same'):
     """ 
@@ -290,19 +289,19 @@ def kGroupConv3D(last_tensor, filters=32, channel_axis=3, channels_per_group=16,
         extra_filters = filters % groups
         # should we create an additional path so we can fit the extra filters?
         if (extra_filters == 0):
-            last_tensor = conv3d_bn(last_tensor, filters-extra_filters, kernel_size, kernel_size, name=name+'_m'+str(groups), activation=activation, has_batch_norm=has_batch_norm, has_batch_scale=has_batch_scale, use_bias=use_bias, padding=padding, strides=(stride_size, stride_size), groups=groups)
+            last_tensor = conv3d_bn(last_tensor, filters-extra_filters, kernel_size, kernel_size, kernel_size, name=name+'_m'+str(groups), activation=activation, has_batch_norm=has_batch_norm, has_batch_scale=has_batch_scale, use_bias=use_bias, padding=padding, strides=(stride_size, stride_size, stride_size), groups=groups)
         else:
             root = last_tensor
             # the main path
-            path1 = conv3d_bn(root, filters-extra_filters, kernel_size, kernel_size, name=name+'_p1_'+str(groups), activation=activation, has_batch_norm=has_batch_norm, has_batch_scale=has_batch_scale, use_bias=use_bias, padding=padding, strides=(stride_size, stride_size), groups=groups)
+            path1 = conv3d_bn(root, filters-extra_filters, kernel_size, kernel_size,kernel_size, name=name+'_p1_'+str(groups), activation=activation, has_batch_norm=has_batch_norm, has_batch_scale=has_batch_scale, use_bias=use_bias, padding=padding, strides=(stride_size, stride_size, stride_size), groups=groups)
             # we'll create one group per extra filter.
             path2 = CopyChannels3D(0, local_channels_per_group * extra_filters)(root)
-            path2 = conv3d_bn(path2, extra_filters, kernel_size, kernel_size, name=name+'_p2', activation=activation, has_batch_norm=has_batch_norm, has_batch_scale=has_batch_scale, use_bias=use_bias, padding=padding, strides=(stride_size, stride_size), groups=extra_filters)
+            path2 = conv3d_bn(path2, extra_filters, kernel_size, kernel_size, kernel_size, name=name+'_p2', activation=activation, has_batch_norm=has_batch_norm, has_batch_scale=has_batch_scale, use_bias=use_bias, padding=padding, strides=(stride_size, stride_size, stride_size), groups=extra_filters)
             # concats both paths.
-            last_tensor =  tensorflow.keras.layers.Concatenate(axis=3, name=name+'_dc')([path1, path2]) # deep concat
+            last_tensor =  tensorflow.keras.layers.Concatenate(axis=4, name=name+'_dc')([path1, path2]) # deep concat
     else:
         # deep unmodified.
-        last_tensor = conv3d_bn(last_tensor, filters, kernel_size, kernel_size, name=name+'_dum', activation=activation, has_batch_norm=has_batch_norm, has_batch_scale=has_batch_scale, use_bias=use_bias, padding=padding, strides=(stride_size, stride_size))
+        last_tensor = conv3d_bn(last_tensor, filters, kernel_size, kernel_size, kernel_size, name=name+'_dum', activation=activation, has_batch_norm=has_batch_norm, has_batch_scale=has_batch_scale, use_bias=use_bias, padding=padding, strides=(stride_size, stride_size, stride_size))
     return last_tensor, groups
 
 def kConv3DType10(last_tensor, filters=32, channel_axis=3, name=None, activation=None, has_batch_norm=True, has_batch_scale=True, use_bias=True, min_channels_per_group=16, kernel_size=1, stride_size=1, padding='same', never_intergroup=False):
@@ -328,9 +327,8 @@ def kConv3DType10(last_tensor, filters=32, channel_axis=3, name=None, activation
             output_tensor = tensorflow.keras.layers.add([output_tensor, compression_tensor], name=name+'_iga')
     else:
         # unmofied
-        output_tensor = conv3d_bn(last_tensor, filters, kernel_size, kernel_size, name=name+'_um', activation=activation, has_batch_norm=has_batch_norm, has_batch_scale=has_batch_scale, use_bias=use_bias, padding=padding, strides=(stride_size, stride_size))
+        output_tensor = conv3d_bn(last_tensor, filters, kernel_size, kernel_size, kernel_size, name=name+'_um', activation=activation, has_batch_norm=has_batch_norm, has_batch_scale=has_batch_scale, use_bias=use_bias, padding=padding, strides=(stride_size, stride_size, stride_size))
     return output_tensor
-
 
 def kConv3DType2(last_tensor, filters=32, channel_axis=4, name=None, activation=None, has_batch_norm=True, has_batch_scale=True, use_bias=True, min_channels_per_group=16, kernel_size=1, stride_size=1, padding='same'):
     """
@@ -364,9 +362,8 @@ def kConv3DType2(last_tensor, filters=32, channel_axis=4, name=None, activation=
         output_tensor = conv3d_bn(output_tensor, output_channel_count, kernel_size, kernel_size, kernel_size, name=name, activation=activation, has_batch_norm=has_batch_norm, has_batch_scale=has_batch_scale, use_bias=use_bias)
     return output_tensor
 
-
 ##kTYpe = 2?
-def kConv3D(last_tensor, filters=32, channel_axis=4, name=None, activation=None, has_batch_norm=True, has_batch_scale=True, use_bias=True, kernel_size=1, stride_size=1, padding='same', kType = D6_32ch()):
+def kConv3D(last_tensor, filters=32, channel_axis=4, name=None, activation=None, has_batch_norm=True, has_batch_scale=True, use_bias=True, kernel_size=1, stride_size=1, padding='same', kType = D6v3_32ch()):
     print("last_tensor input kconv3d    ", last_tensor)
     prev_layer_channel_count = tensorflow.keras.backend.int_shape(last_tensor)[channel_axis]
     print("last_tensor after keras backend  ", last_tensor)
@@ -385,7 +382,6 @@ def kConv3D(last_tensor, filters=32, channel_axis=4, name=None, activation=None,
     if kType == D6_32ch():
         return kConv3DType2(last_tensor, filters=filters, channel_axis=channel_axis, name=name, activation=activation, has_batch_norm=has_batch_norm, has_batch_scale=has_batch_scale, use_bias=use_bias, kernel_size=kernel_size, stride_size=stride_size, padding=padding, min_channels_per_group=32)
 
-
 def kPointwiseConv3D(last_tensor, filters=32, channel_axis=4, name=None, activation=None, has_batch_norm=True, has_batch_scale=True, use_bias=True, kType=2):
     """
     Parameter efficient pointwise convolution as shown in these papers:
@@ -394,7 +390,6 @@ def kPointwiseConv3D(last_tensor, filters=32, channel_axis=4, name=None, activat
     """
     print("last tensor input kPointwiseConv3D   ", last_tensor)
     return kConv3D(last_tensor, filters=filters, channel_axis=channel_axis, name=name, activation=activation, has_batch_norm=has_batch_norm, has_batch_scale=has_batch_scale, use_bias=use_bias, kernel_size=1, stride_size=1, padding='same', kType=kType)
-
 
 def kblock(inputs, activation_fn=swish, drop_rate=0., name='',
           filters_in=32, filters_out=16, kernel_size=3, strides=1,
@@ -505,7 +500,6 @@ def GlobalAverageMaxPooling2D(previous_layer,  name=None):
       tensorflow.keras.layers.GlobalMaxPooling3D(name=name+'_max')(previous_layer)
     ])
 
-
 def kEffNet3D(
         width_coefficient,
         depth_coefficient,
@@ -601,9 +595,10 @@ def kEffNet3D(
     
     # Build stem
     x = img_input
-    print(x)
+    print("before ZeroPadding3D", x)
     x = layers.ZeroPadding3D(padding=correct_pad3d(backend, x, (3, 3, 3)),
                              name=name_prefix+'stem_conv_pad3d')(x)
+    print("after ZeroPadding3D", x)
 
     first_stride = 1 if skip_stride_cnt >= 0 else 2
     x = layers.Conv3D(round_filters(32), 3,
@@ -688,4 +683,27 @@ def kEffNet3D(
 
     return model
 
+def kEfficientNet3DB0(include_top=True,
+                   input_tensor=None,
+                   input_shape=None,
+                   pooling='avg',
+                   classes=1000,
+                   kType=2,
+                   dropout_rate=0.2,
+                   drop_connect_rate=0.2,
+                   skip_stride_cnt=-1,
+                   activation_fn=swish,
+                   dropout_all_blocks=False,
+                   **kwargs):
+    return kEffNet3D(1.0, 1.0, skip_stride_cnt=skip_stride_cnt, # 224,
+                        model_name='kEffNet3D-b0',
+                        include_top=include_top,
+                        input_tensor=input_tensor, input_shape=input_shape,
+                        pooling=pooling, classes=classes,
+                        kType=kType,
+                        dropout_rate=dropout_rate,
+                        drop_connect_rate=drop_connect_rate,
+                        activation_fn=activation_fn,
+                        dropout_all_blocks=dropout_all_blocks,
+                        **kwargs)
 

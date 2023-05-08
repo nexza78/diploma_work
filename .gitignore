@@ -2,3 +2,6 @@
 EfficientNet/CT-0.zip
 EfficientNet/CT-23.zip
 *.gz
+*.dat
+EfficientNet/Xtrain.txt
+*.npy
