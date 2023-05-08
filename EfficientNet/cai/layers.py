@@ -404,6 +404,7 @@ def kConv2DType2(last_tensor, filters=32, channel_axis=3, name=None, activation=
         output_tensor = conv2d_bn(output_tensor, output_channel_count, kernel_size, kernel_size, name=name, activation=activation, has_batch_norm=has_batch_norm, has_batch_scale=has_batch_scale, use_bias=use_bias)
     return output_tensor
 
+
 def kConv2DType3(last_tensor,  filters=32,  channel_axis=3,  name=None, activation=None, has_batch_norm=True, has_batch_scale=True, use_bias=True, kernel_size=1, stride_size=1, padding='same', min_channels_per_group=16):
     """
     Same as Type 1 but without interleaving and extra convolution.
@@ -664,7 +665,9 @@ def kConv2DType10(last_tensor, filters=32, channel_axis=3, name=None, activation
     return output_tensor
 
 def kConv2D(last_tensor, filters=32, channel_axis=3, name=None, activation=None, has_batch_norm=True, has_batch_scale=True, use_bias=True, kernel_size=1, stride_size=1, padding='same', kType=2):
+    print("last_tensor  ", last_tensor)
     prev_layer_channel_count = tensorflow.keras.backend.int_shape(last_tensor)[channel_axis]
+    print("prev_layer_channel_count ", prev_layer_channel_count)
     if kType == 0:
         return kConv2DType0(last_tensor, filters=filters, channel_axis=channel_axis, name=name, activation=activation, has_batch_norm=has_batch_norm, has_batch_scale=has_batch_scale, use_bias=use_bias, kernel_size=kernel_size, stride_size=stride_size, padding=padding)
     elif kType == 1:
