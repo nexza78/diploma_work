@@ -5,3 +5,4 @@ EfficientNet/CT-23.zip
 *.dat
 EfficientNet/Xtrain.txt
 *.npy
+*.hdf5
