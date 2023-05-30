@@ -2,6 +2,7 @@ import cai.layers
 import cai.util
 import cai.inception_v3
 from tensorflow import keras
+import tensorflow
 from tensorflow.keras.models import Model
 from tensorflow.keras.models import model_from_json
 import numpy as np
@@ -35,7 +36,7 @@ def load_kereas_model(filename):
     """
     Loads a Keras model with CAI custom layers.
     """
-    return keras.models.load_model(filename, custom_objects=cai.layers.GetClasses())
+    return tensorflow.keras.models.load_model(filename, custom_objects=cai.layers.GetClasses(), compile=False)
 
 def make_model_trainable(model):
     """
